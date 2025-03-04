@@ -64,7 +64,7 @@ app.post("/execute", checkToken, async (req, res) => {
       }`
     );
 
-    const result = await Function(puppeteer, browser, page, console);
+    const result = await asyncFunction(puppeteer, browser, page, console);
     await browser.close();
     res.json({ result });
 
