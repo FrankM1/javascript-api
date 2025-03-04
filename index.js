@@ -39,6 +39,7 @@ app.get("/", (_, res) => {
 
 // Execute code endpoint
 app.post("/execute", checkToken, async (req, res) => {
+  global.DOMParser = new JSDOM().window.DOMParser
 
   const code = req.body?.trim();
   if (!code) {
