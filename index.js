@@ -51,7 +51,7 @@ app.post("/execute", checkToken, async (req, res) => {
     page.setDefaultTimeout(TIMEOUT);
 
     // Execute code in isolated context
-    const asyncFunction = new AsyncFunction(
+    const asyncFunction = new Function(
       'puppeteer', 
       'browser', 
       'page', 
@@ -64,7 +64,7 @@ app.post("/execute", checkToken, async (req, res) => {
       }`
     );
 
-    const result = await asyncFunction(puppeteer, browser, page, console);
+    const result = await Function(puppeteer, browser, page, console);
     await browser.close();
     res.json({ result });
 
