@@ -1,4 +1,6 @@
 require('dotenv').config();
+const jsdom = require("jsdom")
+const { JSDOM } = jsdom
 
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -37,6 +39,8 @@ app.get("/", (_, res) => {
 
 // Execute code endpoint
 app.post("/execute", checkToken, async (req, res) => {
+  global.DOMParser = new JSDOM().window.DOMParser
+
   const code = req.body?.trim();
   if (!code) {
     return res.status(400).json({ error: "No code provided" });
