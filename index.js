@@ -1,4 +1,6 @@
 require('dotenv').config();
+const jsdom = require("jsdom")
+const { JSDOM } = jsdom
 
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -7,9 +9,8 @@ const { OpenAI } = require('openai');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-
-// Secure token from environment variable
 const SECURE_TOKEN = process.env.SECURE_TOKEN;
+const TIMEOUT = 60000; // 60 seconds timeout
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -17,67 +18,73 @@ const openai = new OpenAI({
 });
 
 // Middleware
-app.use(bodyParser.text({ type: "text/plain", limit: "50mb" }));
+app.use(bodyParser.text({ 
+  type: "text/plain", 
+  limit: "50mb" 
+}));
 
-// Function to check token
+// Token validation middleware
 const checkToken = (req, res, next) => {
-    const token = req.headers.authorization;
-    if (token === SECURE_TOKEN) {
-        next();
-    } else {
-        res.status(401).json({ error: "Unauthorized" });
-    }
+  if (req.headers.authorization === SECURE_TOKEN) {
+    return next();
+  }
+  res.status(401).json({ error: "Unauthorized" });
 };
 
-// Get Endpoint
-app.get("/", (req, res) => {
-    res.send("Uplifted Render Server Up and running");
+// Browser launch options
+const browserOptions = {
+  headless: true,
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  timeout: TIMEOUT
+};
+
+// Health check endpoint
+app.get("/", (_, res) => {
+  res.send("Uplifted Render Server Up and running");
 });
 
-// Execute endpoint
+// Execute code endpoint
 app.post("/execute", checkToken, async (req, res) => {
-    const code = req.body;
-    if (!code) {
-        return res.status(400).json({ error: "No code provided" });
-    }
+  global.DOMParser = new JSDOM().window.DOMParser
 
-    let browser;
-    try {
-        // Launch browser with timeout and resource constraints
-        browser = await puppeteer.launch({ 
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-            timeout: 60000 // 60 seconds timeout for launching the browser
-        });
+  const code = req.body?.trim();
+  if (!code) {
+    return res.status(400).json({ error: "No code provided" });
+  }
 
-        // Open new page
-        const page = await browser.newPage();
+  let browser;
+  try {
+    browser = await puppeteer.launch(browserOptions);
+    const page = await browser.newPage();
+    
+    page.setDefaultNavigationTimeout(TIMEOUT);
+    page.setDefaultTimeout(TIMEOUT);
 
-        // Set default timeouts for navigation and waiting
-        const TIMEOUT = 60000; // 60 seconds
-        page.setDefaultNavigationTimeout(TIMEOUT);
-        page.setDefaultTimeout(TIMEOUT);
+    // Execute code in isolated context
+    const asyncFunction = new Function(
+      'puppeteer', 
+      'browser', 
+      'page', 
+      'console',
+      `try {
+        ${code}
+      } catch (err) {
+        console.error('Code execution error:', err);
+        throw err;
+      }`
+    );
 
-        // Create a function with puppeteer, browser, page, and console in its scope
-        const asyncFunction = new Function('puppeteer', 'browser', 'page', 'console', `
-            return (async () => {
-                ${code}
-            })();
-        `);
+    const result = await asyncFunction(puppeteer, browser, page, console);
+    await browser.close();
+    res.json({ result });
 
-        // Execute and await the result
-        const result = await asyncFunction(puppeteer, browser, page, console);
-        
-        // Close browser
-        await browser.close();
-
-        // Return the result
-        res.json({ result });
-    } catch (error) {
-        // Ensure browser is closed in case of an error
-        if (browser) await browser.close();
-        res.status(500).json({ error: error.message, trace: error.stack });
-    }
+  } catch (error) {
+    if (browser) await browser.close();
+    res.status(500).json({ 
+      error: error.message, 
+      trace: error.stack 
+    });
+  }
 });
 
 // Generate keywords endpoint
@@ -118,5 +125,5 @@ app.post("/generate-keywords", checkToken, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
