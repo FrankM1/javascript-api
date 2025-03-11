@@ -4,6 +4,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const puppeteer = require('puppeteer');
 const { OpenAI } = require('openai');
+const { JSDOM } = require('jsdom');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -14,6 +15,10 @@ const TIMEOUT = 60000; // 60 seconds timeout
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
+
+// Initialize JSDOM for DOMParser
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
+const { DOMParser } = dom.window;
 
 // Middleware
 app.use(bodyParser.text({ 
@@ -67,11 +72,13 @@ app.post("/execute", async (req, res) => {
 
     // Execute code in isolated context
     const asyncFunction = new Function(
-      'puppeteer', 
+      'puppeteer',
       'browser', 
-      'page', 
+      'page',
       'console',
+      'DOMParser',
       `try {
+        const parser = new DOMParser();
         ${code}
       } catch (err) {
         console.error('Code execution error:', err);
@@ -79,7 +86,12 @@ app.post("/execute", async (req, res) => {
       }`
     );
 
-    const result = await asyncFunction(puppeteer, browser, page, console);
+    // Create context with DOMParser
+    await page.evaluateOnNewDocument(() => {
+      window.DOMParser = window.DOMParser;
+    });
+
+    const result = await asyncFunction(puppeteer, browser, page, console, DOMParser);
     await browser.close();
     res.json({ result });
 
