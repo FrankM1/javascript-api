@@ -5,11 +5,17 @@ const { JSDOM } = jsdom
 const express = require("express");
 const bodyParser = require("body-parser");
 const puppeteer = require('puppeteer');
+const { OpenAI } = require('openai');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const SECURE_TOKEN = process.env.SECURE_TOKEN;
 const TIMEOUT = 60000; // 60 seconds timeout
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
 
 // Middleware
 app.use(bodyParser.text({ 
@@ -79,6 +85,43 @@ app.post("/execute", checkToken, async (req, res) => {
       trace: error.stack 
     });
   }
+});
+
+// Generate keywords endpoint
+app.post("/generate-keywords", checkToken, async (req, res) => {
+    const text = req.body;
+    if (!text) {
+        return res.status(400).json({ error: "No text provided" });
+    }
+
+    try {
+        const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a keyword extraction specialist. Extract relevant keywords from the given text and return them as a comma-separated list. Focus on important terms, topics, and themes."
+                },
+                {
+                    role: "user",
+                    content: `Extract keywords from this text: ${text}`
+                }
+            ],
+            temperature: 0.3,
+        });
+
+        const keywords = completion.choices[0].message.content
+            .split(',')
+            .map(keyword => keyword.trim())
+            .filter(keyword => keyword.length > 0);
+
+        res.json({ keywords });
+    } catch (error) {
+        res.status(500).json({ 
+            error: "Failed to generate keywords",
+            details: error.message 
+        });
+    }
 });
 
 app.listen(PORT, () => {
