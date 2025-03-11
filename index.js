@@ -1,6 +1,4 @@
 require('dotenv').config();
-const jsdom = require("jsdom")
-const { JSDOM } = jsdom
 
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -31,6 +29,14 @@ const checkToken = (req, res, next) => {
   res.status(401).json({ error: "Unauthorized" });
 };
 
+// Apply token check to all routes except health check
+app.use((req, res, next) => {
+  if (req.path === '/') {
+    return next();
+  }
+  checkToken(req, res, next);
+});
+
 // Browser launch options
 const browserOptions = {
   headless: true,
@@ -44,8 +50,7 @@ app.get("/", (_, res) => {
 });
 
 // Execute code endpoint
-app.post("/execute", checkToken, async (req, res) => {
-  global.DOMParser = new JSDOM().window.DOMParser
+app.post("/execute", async (req, res) => {
 
   const code = req.body?.trim();
   if (!code) {
@@ -88,7 +93,7 @@ app.post("/execute", checkToken, async (req, res) => {
 });
 
 // Generate keywords endpoint
-app.post("/generate-keywords", checkToken, async (req, res) => {
+app.post("/generate-keywords", async (req, res) => {
     const text = req.body;
     if (!text) {
         return res.status(400).json({ error: "No text provided" });
