@@ -141,6 +141,51 @@ app.post("/generate-keywords", async (req, res) => {
     }
 });
 
+// Generate project concepts
+app.post("/generate-concepts", async (req, res) => {
+  const { projectDescription, designStyle } = req.body;
+  if (!projectDescription) {
+      return res.status(400).json({ error: "No project description provided" });
+  }
+
+  try {
+      const completion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [
+              {
+                  role: "system",
+                  content: "You are a creative design consultant specializing in generating innovative project concepts and design directions. For any given project description, provide 3-5 unique concept directions, each with a title and brief description. Focus on creative, feasible, and user-centered design solutions."
+              },
+              {
+                  role: "user",
+                  content: `Generate creative design concepts for this project: ${projectDescription}${designStyle ? `. The desired design style is: ${designStyle}` : ''}`
+              }
+          ],
+          temperature: 0.7,
+      });
+
+      const conceptsText = completion.choices[0].message.content;
+      
+      // Parse the response into a structured format
+      const concepts = conceptsText.split('\n\n')
+          .filter(concept => concept.trim().length > 0)
+          .map(concept => {
+              const [title, ...descriptionLines] = concept.split('\n');
+              return {
+                  title: title.replace(/^\d+\.\s*/, '').trim(),
+                  description: descriptionLines.join(' ').trim()
+              };
+          });
+
+      res.json({ concepts });
+  } catch (error) {
+      res.status(500).json({ 
+          error: "Failed to generate design concepts",
+          details: error.message 
+      });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
